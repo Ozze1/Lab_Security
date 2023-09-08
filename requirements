@@ -1,0 +1,4 @@
+these roles are a requirement to run some playbooks
+
+- ansible-galaxy install atosatto.grafana
+- ansible-galaxy install cloudalchemy.prometheus

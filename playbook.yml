@@ -1,0 +1,89 @@
+---
+- name: labb security
+  hosts: osama123
+  become: true
+  tasks:
+    - name: update cache
+      apt:
+        update_cache: yes
+
+    - name: Upgrade packages
+      apt:
+        upgrade: yes
+        autoremove: yes
+        autoclean: yes
+  
+    - name: Open necessary ports
+      ufw:
+        rule: allow
+        proto: tcp
+        port: '{{ item }}'
+      with_items:
+        - 22
+        - 443
+        - 80
+        - 9090
+        - 3000
+
+    - name: Enable firewall
+      community.general.ufw:
+        state: enabled
+
+    - name: ssh Hardening
+      lineinfile:
+        dest: /etc/ssh/sshd_config
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+      with_items:
+        - { regexp: '^PermitRootLogin', line: 'PermitRootLogin no' }
+        - { regexp: '^PasswordAuthentication', line: 'PasswordAuthentication no' }
+        - { regexp: '^X11Forwarding', line: 'X11Forwarding no' }
+
+    - name: Configure Prometheus to listen only on localhost
+      lineinfile:
+        path: /etc/prometheus/prometheus.yml
+        regexp: '^  listen_address:'
+        line: '  listen_address: 127.0.0.1'
+
+    - name: Configure Grafana to listen only on localhost
+      ini_file:
+        path: /etc/grafana/grafana.ini
+        section: server
+        option: http_addr
+        value: 127.0.0.1
+
+    - name: Install gunzip
+      apt:
+        name: gzip
+        state: present
+
+    - name: Add Caddy PPA
+      apt_repository:
+        repo: 'deb [trusted=yes] https://apt.fury.io/caddy/ /'
+        state: present
+        update_cache: yes
+
+    - name: Install Caddy
+      apt:
+        name: caddy
+        state: present
+
+    - name: Start caddy
+      service:
+          name=caddy 
+          state=started 
+          enabled=yes 
+
+    - name : Configure Caddy reverse proxy for Prometheus & Grafana.
+      copy:
+          content : |
+              {
+                  admin off
+              }
+              prometheus.osama.chas.grinton.dev {
+                  reverse_proxy localhost:9090
+              }
+              grafana.osama.chas.grinton.dev {
+                  reverse_proxy localhost:3000
+              }
+          dest : /etc/caddy/Caddyfile
